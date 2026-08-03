@@ -2,9 +2,8 @@ extends Node3D
 
 # class-level vars
 var grid = {}
-var character: MeshInstance3D
+var character: Character
 var tile_size = 2.0
-var has_moved = false
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -31,20 +30,15 @@ func _ready() -> void:
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = { "walkable": true }
+			grid[Vector2i(x, z)] = {"walkable": true}
 
 			add_child(tile)
 
 	# spawn a player character
-	character = MeshInstance3D.new()
-	var char_mesh = CapsuleMesh.new()
-
-	character.mesh = char_mesh
-
-	var starting_pos = Vector2i(0, 0)
-	character.position = Vector3(starting_pos.x * tile_size, 1.0, starting_pos.y * tile_size)
-
+	character = Character.new()
 	add_child(character)
+
+	character.setup(Vector2i(0, 0), tile_size) # Initialize the character with starting position and tile size
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -58,9 +52,49 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
-			if not has_moved:
-				character.position = Vector3(grid_pos.x * tile_size, character.position.y, grid_pos.y * tile_size)
-				has_moved = true
+			if not character.has_moved:
+				var path = find_path(character.grid_pos, grid_pos)
+				character.move_along_path(path)
+			else:
+				print("Character has already moved this turn")
 
 	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
-		has_moved = false
+		character.end_turn()
+		print("Turn ended")
+
+func get_neighbors(pos: Vector2i) -> Array:
+	var neighbors = []
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+
+	for dir in directions:
+		var neighbor = pos + dir
+		if grid.has(neighbor) and grid[neighbor]["walkable"]:
+			neighbors.append(neighbor)
+	return neighbors
+
+func find_path(start: Vector2i, target: Vector2i) -> Array:
+	var queue = [start]
+	var came_from = {start: start}
+
+	while queue.size() > 0:
+		var current = queue.pop_front()
+
+		if current == target:
+			break
+
+		for neighbor in get_neighbors(current):
+			if not came_from.has(neighbor):
+				came_from[neighbor] = current
+				queue.append(neighbor)
+			
+	if not came_from.has(target):
+		return [] # No path found
+	
+	var path = []
+	var step = target
+	while step != start:
+		path.append(step)
+		step = came_from[step]
+	path.reverse()
+
+	return path
