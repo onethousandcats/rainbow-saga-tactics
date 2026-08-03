@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://bpjsjujnjq2hi"]
+
+[ext_resource type="Script" uid="uid://bwv84l7fxhktg" path="res://node_3d.gd" id="1_a202f"]
+
+[node name="Node3D" type="Node3D" unique_id=2138172196]
+script = ExtResource("1_a202f")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=126054742]
+transform = Transform3D(0.7071067, -0.4055798, 0.579228, 0, 0.81915206, 0.57357645, -0.7071067, -0.4055798, 0.579228, 10, 10, 15)
+projection = 1
+current = true
+size = 25.0
+near = 0.001
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=854235278]
