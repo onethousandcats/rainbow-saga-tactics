@@ -30,7 +30,7 @@ func _ready() -> void:
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = {"walkable": true}
+			grid[Vector2i(x, z)] = {"walkable": true, "node": tile }
 
 			add_child(tile)
 
@@ -39,6 +39,7 @@ func _ready() -> void:
 	add_child(character)
 
 	character.setup(Vector2i(0, 0), tile_size) # Initialize the character with starting position and tile size
+	highlight_tiles(get_reachable_tiles(character.grid_pos, character.move_range))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -56,13 +57,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
 			if not character.has_moved:
-				var path = find_path(character.grid_pos, grid_pos)
-				character.move_along_path(path)
+				var reachable = get_reachable_tiles(character.grid_pos, character.move_range)
+				if grid_pos in reachable:
+					var path = find_path(character.grid_pos, grid_pos)
+					character.move_along_path(path)
+					clear_highlights()
+				else:
+					print("Target tile is not reachable")
 			else:
 				print("Character has already moved this turn")
 
 	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
 		character.end_turn()
+		highlight_tiles(get_reachable_tiles(character.grid_pos, character.move_range))
 		print("Turn ended")
 
 func get_neighbors(pos: Vector2i) -> Array:
@@ -119,3 +126,21 @@ func find_path(start: Vector2i, target: Vector2i) -> Array:
 	path.reverse()
 
 	return path
+
+func highlight_tiles(tiles: Array) -> void:
+	for pos in grid.keys():
+		var tile_node = grid[pos]["node"]
+		var mat = StandardMaterial3D.new()
+		if pos in tiles:
+			mat.albedo_color = Color.YELLOW
+		else:
+			mat.albedo_color = Color.WHITE
+		tile_node.set_surface_override_material(0, mat)
+
+func clear_highlights() -> void:
+	for pos in grid.keys():
+		var tile_node = grid[pos]["node"]
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color.WHITE
+		tile_node.set_surface_override_material(0, mat)
+		
