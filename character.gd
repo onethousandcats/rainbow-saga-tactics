@@ -19,6 +19,7 @@ var tile_size: float = 2.0
 var has_moved: bool = false
 var is_alive: bool = true
 var is_animating: bool = false
+var is_player_controlled: bool = true
 
 func _ready() -> void:
 	print("Character ", character_name, " has entered the battlefield with ", current_health, " health")

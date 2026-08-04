@@ -2,6 +2,7 @@ extends Node3D
 
 # class-level vars
 var grid = {}
+var turn_manager: TurnManager
 var character: Character
 var tile_size = 2.0
 
@@ -30,19 +31,40 @@ func _ready() -> void:
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = {"walkable": true, "node": tile }
+			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null }
 
 			add_child(tile)
 
 	# spawn a player character
-	character = Character.new()
-	add_child(character)
+	var player_unit = Character.new()
+	add_child(player_unit)
+	player_unit.setup(Vector2i(0, 0), tile_size) # Initialize the character with starting position and tile size
+	set_occupant(player_unit.grid_pos, player_unit)
 
-	character.setup(Vector2i(0, 0), tile_size) # Initialize the character with starting position and tile size
-	highlight_tiles(get_reachable_tiles(character.grid_pos, character.move_range))
+	player_unit.is_player_controlled = true
+
+	# spawn an enemy character
+	var enemy_unit = Character.new()
+	add_child(enemy_unit)
+	enemy_unit.setup(Vector2i(7, 7), tile_size)
+	enemy_unit.is_player_controlled = false
+	set_occupant(enemy_unit.grid_pos, enemy_unit)
+
+	turn_manager = TurnManager.new()
+	add_child(turn_manager)
+	turn_manager.setup([player_unit, enemy_unit], self)
+
+	highlight_tiles(get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range))
+
+func set_occupant(pos: Vector2i, unit: Character) -> void:
+	if grid.has(pos):
+		grid[pos]["occupant"] = unit
+
+func is_occupied(pos: Vector2i) -> bool:
+	return grid.has(pos) and grid[pos]["occupant"] != null
 
 func _unhandled_input(event: InputEvent) -> void:
-	if character.is_animating:
+	if turn_manager.current_unit().is_animating:
 		return # Ignore input while character is animating
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -54,16 +76,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		var query = PhysicsRayQueryParameters3D.create(from, to)
 		var result = space_state.intersect_ray(query)
 
-		print("Move range of character: ", character.move_range)
-		print("Reachable tiles from character position: ", get_reachable_tiles(character.grid_pos, character.move_range))
+		print("Move range of character: ", turn_manager.current_unit().move_range)
+		print("Reachable tiles from character position: ", get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range))
 
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
-			if not character.has_moved:
-				var reachable = get_reachable_tiles(character.grid_pos, character.move_range)
+			if not turn_manager.current_unit().has_moved:
+				var reachable = get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range)
 				if grid_pos in reachable:
-					var path = find_path(character.grid_pos, grid_pos)
-					character.move_along_path(path)
+					var old_pos = turn_manager.current_unit().grid_pos
+					var path = find_path(old_pos, grid_pos)
+					turn_manager.current_unit().move_along_path(path)
+					
+					# update the grid occupancy
+					set_occupant(old_pos, null)
+					set_occupant(grid_pos, turn_manager.current_unit())
+
 					clear_highlights()
 				else:
 					print("Target tile is not reachable")
@@ -71,17 +99,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				print("Character has already moved this turn")
 
 	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
-		character.end_turn()
-		highlight_tiles(get_reachable_tiles(character.grid_pos, character.move_range))
+		turn_manager.advance_turn()
 		print("Turn ended")
 
 func get_neighbors(pos: Vector2i) -> Array:
 	var neighbors = []
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-
 	for dir in directions:
 		var neighbor = pos + dir
-		if grid.has(neighbor) and grid[neighbor]["walkable"]:
+		if grid.has(neighbor) and grid[neighbor]["walkable"] and not is_occupied(neighbor):
 			neighbors.append(neighbor)
 	return neighbors
 
