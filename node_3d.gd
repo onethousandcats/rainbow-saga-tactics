@@ -50,6 +50,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		var query = PhysicsRayQueryParameters3D.create(from, to)
 		var result = space_state.intersect_ray(query)
 
+		print("Move range of character: ", character.move_range)
+		print("Reachable tiles from character position: ", get_reachable_tiles(character.grid_pos, character.move_range))
+
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
 			if not character.has_moved:
@@ -71,6 +74,24 @@ func get_neighbors(pos: Vector2i) -> Array:
 		if grid.has(neighbor) and grid[neighbor]["walkable"]:
 			neighbors.append(neighbor)
 	return neighbors
+
+func get_reachable_tiles(start: Vector2i, move_range: int) -> Array:
+	var distances = {start: 0}
+	var queue = [start]
+	
+	while queue.size() > 0:
+		var current = queue.pop_front()
+		var current_distance = distances[current]
+
+		if current_distance >= move_range:
+			continue # don't expand further from here, out of range
+
+		for neighbor in get_neighbors(current):
+			if not distances.has(neighbor):
+				distances[neighbor] = current_distance + 1
+				queue.append(neighbor)
+
+	return distances.keys()
 
 func find_path(start: Vector2i, target: Vector2i) -> Array:
 	var queue = [start]
