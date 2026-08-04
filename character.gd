@@ -18,6 +18,7 @@ var grid_pos: Vector2i
 var tile_size: float = 2.0
 var has_moved: bool = false
 var is_alive: bool = true
+var is_animating: bool = false
 
 func _ready() -> void:
 	print("Character ", character_name, " has entered the battlefield with ", current_health, " health")
@@ -53,13 +54,19 @@ func move_along_path(path: Array) -> void:
 	if path.size() == 0:
 		return
 
+	is_animating = true
 	var tween = create_tween()
 	for step in path:
 		var target = Vector3(step.x * tile_size, position.y, step.y * tile_size)
 		tween.tween_property(self, "position", target, 0.3)
 
+	tween.finished.connect(_on_move_finished)
+
 	grid_pos = path[path.size() - 1]
 	has_moved = true
+
+func _on_move_finished() -> void:
+	is_animating = false
 
 func end_turn() -> void:
 	has_moved = false

@@ -42,6 +42,9 @@ func _ready() -> void:
 	highlight_tiles(get_reachable_tiles(character.grid_pos, character.move_range))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if character.is_animating:
+		return # Ignore input while character is animating
+
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var cam = get_viewport().get_camera_3d()
 		var from = cam.project_ray_origin(event.position)
