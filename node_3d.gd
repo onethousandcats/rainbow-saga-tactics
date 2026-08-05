@@ -64,7 +64,9 @@ func is_occupied(pos: Vector2i) -> bool:
 	return grid.has(pos) and grid[pos]["occupant"] != null
 
 func _unhandled_input(event: InputEvent) -> void:
-	if turn_manager.current_unit().is_animating:
+	var unit = turn_manager.current_unit()
+
+	if unit.is_animating:
 		return # Ignore input while character is animating
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -76,21 +78,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		var query = PhysicsRayQueryParameters3D.create(from, to)
 		var result = space_state.intersect_ray(query)
 
-		print("Move range of character: ", turn_manager.current_unit().move_range)
-		print("Reachable tiles from character position: ", get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range))
+		print("Move range of character: ", unit.move_range)
+		print("Reachable tiles from character position: ", get_reachable_tiles(unit.grid_pos, unit.move_range))
 
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
-			if not turn_manager.current_unit().has_moved:
-				var reachable = get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range)
+			if not unit.has_moved:
+				var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
 				if grid_pos in reachable:
-					var old_pos = turn_manager.current_unit().grid_pos
+					var old_pos = unit.grid_pos
 					var path = find_path(old_pos, grid_pos)
-					turn_manager.current_unit().move_along_path(path)
+					unit.move_along_path(path)
 					
 					# update the grid occupancy
 					set_occupant(old_pos, null)
-					set_occupant(grid_pos, turn_manager.current_unit())
+					set_occupant(grid_pos, unit)
 
 					clear_highlights()
 				else:
@@ -172,4 +174,21 @@ func clear_highlights() -> void:
 		var mat = StandardMaterial3D.new()
 		mat.albedo_color = Color.WHITE
 		tile_node.set_surface_override_material(0, mat)
+
+func take_npc_turn(unit: Character) -> void:
+	var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
+	reachable.erase(unit.grid_pos)
+
+	if reachable.size() == 0:
+		turn_manager.advance_turn()
+		return
+
+	var target = reachable.pick_random()
+	var old_pos = unit.grid_pos
+	var path = find_path(old_pos, target)
+	unit.move_along_path(path)
+	set_occupant(old_pos, null)
+	set_occupant(target, unit)
+
+	unit.move_finished.connect(turn_manager.advance_turn, CONNECT_ONE_SHOT)
 		

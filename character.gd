@@ -5,6 +5,7 @@ extends Node3D
 # Signals
 signal health_changed(new_health: int)
 signal died
+signal move_finished
 
 # Exported properties (visibile in the editor inspector)
 @export var character_name: String = "Unnamed"
@@ -68,6 +69,7 @@ func move_along_path(path: Array) -> void:
 
 func _on_move_finished() -> void:
 	is_animating = false
+	move_finished.emit()
 
 func end_turn() -> void:
 	has_moved = false

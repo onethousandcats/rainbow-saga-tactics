@@ -22,3 +22,6 @@ func advance_turn() -> void:
 	current_unit_index = (current_unit_index + 1) % units.size()
 	var new_unit = current_unit()
 	bf.highlight_tiles(bf.get_reachable_tiles(new_unit.grid_pos, new_unit.move_range))
+	
+	if not new_unit.is_player_controlled:
+		bf.take_npc_turn(new_unit)  # Call the NPC turn function for AI-controlled units
