@@ -20,7 +20,7 @@ func _ready() -> void:
 			mesh.size = Vector3(tile_size, 0.2 + height, tile_size)
 			
 			tile.mesh = mesh
-			tile.position = Vector3(x * tile_size, 0, z * tile_size)
+			tile.position = Vector3(x * tile_size, 0.1 + height / 2.0, z * tile_size)
 
 			var material = StandardMaterial3D.new()
 
@@ -49,7 +49,7 @@ func _ready() -> void:
 	# spawn a player character
 	var player_unit = Character.new()
 	add_child(player_unit)
-	player_unit.setup(Vector2i(0, 0), tile_size) # Initialize the character with starting position and tile size
+	player_unit.setup(Vector2i(0, 0), tile_size, grid[Vector2i(0, 0)]["height"]) # Initialize the character with starting position and tile size
 	set_occupant(player_unit.grid_pos, player_unit)
 
 	player_unit.is_player_controlled = true
@@ -57,7 +57,7 @@ func _ready() -> void:
 	# spawn an enemy character
 	var enemy_unit = Character.new()
 	add_child(enemy_unit)
-	enemy_unit.setup(Vector2i(7, 7), tile_size)
+	enemy_unit.setup(Vector2i(7, 7), tile_size, grid[Vector2i(7, 7)]["height"])
 	enemy_unit.is_player_controlled = false
 	set_occupant(enemy_unit.grid_pos, enemy_unit)
 
@@ -99,7 +99,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				if grid_pos in reachable:
 					var old_pos = unit.grid_pos
 					var path = find_path(old_pos, grid_pos)
-					unit.move_along_path(path)
+					var heights = []
+					for step in path:
+						heights.append(grid[step]["height"])
+					unit.move_along_path(path, heights)
 					
 					# update the grid occupancy
 					set_occupant(old_pos, null)
@@ -115,13 +118,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		turn_manager.advance_turn()
 		print("Turn ended")
 
-func get_neighbors(pos: Vector2i) -> Array:
+func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
 	var neighbors = []
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var current_height = grid[pos]["height"]
+
 	for dir in directions:
 		var neighbor = pos + dir
 		if grid.has(neighbor) and grid[neighbor]["walkable"] and not is_occupied(neighbor):
-			neighbors.append(neighbor)
+			var height_diff = abs(grid[neighbor]["height"] - current_height)
+			if grid[neighbor]["height"] > current_height:
+				if height_diff <= max_climb:
+					neighbors.append(neighbor)
+			else:
+				if height_diff <= max_drop:
+					neighbors.append(neighbor)
+
 	return neighbors
 
 func get_reachable_tiles(start: Vector2i, move_range: int) -> Array:
@@ -135,7 +147,7 @@ func get_reachable_tiles(start: Vector2i, move_range: int) -> Array:
 		if current_distance >= move_range:
 			continue # don't expand further from here, out of range
 
-		for neighbor in get_neighbors(current):
+		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
 			if not distances.has(neighbor):
 				distances[neighbor] = current_distance + 1
 				queue.append(neighbor)
@@ -152,7 +164,7 @@ func find_path(start: Vector2i, target: Vector2i) -> Array:
 		if current == target:
 			break
 
-		for neighbor in get_neighbors(current):
+		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
 			if not came_from.has(neighbor):
 				came_from[neighbor] = current
 				queue.append(neighbor)
@@ -197,7 +209,11 @@ func take_npc_turn(unit: Character) -> void:
 	var target = reachable.pick_random()
 	var old_pos = unit.grid_pos
 	var path = find_path(old_pos, target)
-	unit.move_along_path(path)
+
+	var heights = []
+	for step in path:
+		heights.append(grid[step]["height"])
+	unit.move_along_path(path, heights)
 	set_occupant(old_pos, null)
 	set_occupant(target, unit)
 
