@@ -13,9 +13,11 @@ func _ready() -> void:
 	# spawn a grid of tiles
 	for x in range(8):
 		for z in range(8):
+			var height = randi_range(0, 2) # Random height for visual variety
+
 			var tile = MeshInstance3D.new()
 			var mesh = BoxMesh.new()
-			mesh.size = Vector3(tile_size, 0.2, tile_size)
+			mesh.size = Vector3(tile_size, 0.2 + height, tile_size)
 			
 			tile.mesh = mesh
 			tile.position = Vector3(x * tile_size, 0, z * tile_size)
@@ -31,7 +33,7 @@ func _ready() -> void:
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null }
+			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null, "height": height} # Random height for visual variety
 
 			add_child(tile)
 
@@ -191,4 +193,3 @@ func take_npc_turn(unit: Character) -> void:
 	set_occupant(target, unit)
 
 	unit.move_finished.connect(turn_manager.advance_turn, CONNECT_ONE_SHOT)
-		
