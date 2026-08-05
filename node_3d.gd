@@ -22,6 +22,15 @@ func _ready() -> void:
 			tile.mesh = mesh
 			tile.position = Vector3(x * tile_size, 0, z * tile_size)
 
+			var material = StandardMaterial3D.new()
+
+			if (x + z) % 2 == 0:
+				material.albedo_color = Color(0.8, 0.8, 0.8)
+			else:
+				material.albedo_color = Color(0.6, 0.6, 0.6)
+
+			tile.material_override = material
+
 			var static_body = StaticBody3D.new()
 			var collision_shape = CollisionShape3D.new()
 			var shape = BoxShape3D.new()
@@ -33,7 +42,7 @@ func _ready() -> void:
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null, "height": height} # Random height for visual variety
+			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null, "height": height, "base_color": material.albedo_color} # Random height for visual variety
 
 			add_child(tile)
 
@@ -167,15 +176,15 @@ func highlight_tiles(tiles: Array) -> void:
 		if pos in tiles:
 			mat.albedo_color = Color.YELLOW
 		else:
-			mat.albedo_color = Color.WHITE
-		tile_node.set_surface_override_material(0, mat)
+			mat.albedo_color = grid[pos]["base_color"]
+		tile_node.material_override = mat
 
 func clear_highlights() -> void:
 	for pos in grid.keys():
 		var tile_node = grid[pos]["node"]
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color.WHITE
-		tile_node.set_surface_override_material(0, mat)
+		mat.albedo_color = grid[pos]["base_color"]
+		tile_node.material_override = mat
 
 func take_npc_turn(unit: Character) -> void:
 	var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
