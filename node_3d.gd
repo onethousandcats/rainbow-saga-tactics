@@ -6,14 +6,27 @@ var turn_manager: TurnManager
 var character: Character
 var tile_size = 2.0
 
+@onready var camera: Camera3D = $Camera3D
+var camera_offset = Vector3(14, 14, 14)
+var camera_transitioning: bool = false
+
+var tile_types = {
+	"plains": {"walkable": true, "color": Color(0.6, 0.8, 0.4)},
+	"grassland": {"walkable": true, "color": Color(0.4, 0.7, 0.3)},
+	"river": {"walkable": true, "color": Color(0.3, 0.5, 0.8)},
+	"ocean": {"walkable": false, "color": Color(0.2, 0.4, 0.7)},
+	"mountain": {"walkable": true, "color": Color(0.5, 0.5, 0.5)},
+}
+
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	print("RAINBOW SAGA TACTICS")
-
+	
 	# spawn a grid of tiles
-	for x in range(8):
-		for z in range(8):
-			var height = randi_range(0, 2) # Random height for visual variety
+	for x in range(16):
+		for z in range(16):
+			var height = randf_range(0.0, 2.0) # Random height for visual variety
 
 			var tile = MeshInstance3D.new()
 			var mesh = BoxMesh.new()
@@ -37,12 +50,19 @@ func _ready() -> void:
 			shape.size = mesh.size
 			collision_shape.shape = shape
 
-			static_body.set_meta("grid_pos", Vector2i(x, z))
+			var type_name = tile_types.keys().pick_random()
+			var type_data = tile_types[type_name]
 
+			static_body.set_meta("grid_pos", Vector2i(x, z))
 			static_body.add_child(collision_shape)
 			tile.add_child(static_body)
 
-			grid[Vector2i(x, z)] = {"walkable": true, "node": tile, "occupant": null, "height": height, "base_color": material.albedo_color} # Random height for visual variety
+			grid[Vector2i(x, z)] = {
+				"type": type_name,
+				"node": tile,
+				"occupant": null,
+				"height": height
+			} # Random height for visual variety
 
 			add_child(tile)
 
@@ -66,6 +86,13 @@ func _ready() -> void:
 	turn_manager.setup([player_unit, enemy_unit], self)
 
 	highlight_tiles(get_reachable_tiles(turn_manager.current_unit().grid_pos, turn_manager.current_unit().move_range))
+
+func _process(delta: float) -> void:
+	if camera_transitioning:
+		return # Skip camera updates while transitioning
+	if turn_manager and turn_manager.units.size() > 0:
+		var unit = turn_manager.current_unit()
+		camera.position = unit.position + camera_offset
 
 func set_occupant(pos: Vector2i, unit: Character) -> void:
 	if grid.has(pos):
@@ -125,7 +152,7 @@ func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
 
 	for dir in directions:
 		var neighbor = pos + dir
-		if grid.has(neighbor) and grid[neighbor]["walkable"] and not is_occupied(neighbor):
+		if grid.has(neighbor) and tile_types[grid[neighbor]["type"]]["walkable"] and not is_occupied(neighbor):
 			var height_diff = abs(grid[neighbor]["height"] - current_height)
 			if grid[neighbor]["height"] > current_height:
 				if height_diff <= max_climb:
@@ -188,14 +215,14 @@ func highlight_tiles(tiles: Array) -> void:
 		if pos in tiles:
 			mat.albedo_color = Color.YELLOW
 		else:
-			mat.albedo_color = grid[pos]["base_color"]
+			mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
 		tile_node.material_override = mat
 
 func clear_highlights() -> void:
 	for pos in grid.keys():
 		var tile_node = grid[pos]["node"]
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = grid[pos]["base_color"]
+		mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
 		tile_node.material_override = mat
 
 func take_npc_turn(unit: Character) -> void:
@@ -218,3 +245,10 @@ func take_npc_turn(unit: Character) -> void:
 	set_occupant(target, unit)
 
 	unit.move_finished.connect(turn_manager.advance_turn, CONNECT_ONE_SHOT)
+
+func transition_camera_to(unit: Character) -> void:
+	camera_transitioning = true
+	var target = unit.position + camera_offset
+	var tween = create_tween()
+	tween.tween_property(camera, "position", target, 1.0)
+	tween.finished.connect(func(): camera_transitioning = false)

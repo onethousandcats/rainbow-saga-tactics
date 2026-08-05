@@ -10,13 +10,14 @@ background_color = Color(0.69041634, 0.7934268, 1, 1)
 script = ExtResource("1_a202f")
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=126054742]
-transform = Transform3D(0.7071067, -0.4055798, 0.579228, 0, 0.81915206, 0.57357645, -0.7071067, -0.4055798, 0.579228, 15, 8.5, 15)
+transform = Transform3D(0.7071067, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.7071067, -0.45451945, 0.5416752, 100, 102.11, 100)
 projection = 1
 current = true
-size = 25.0
-near = 0.001
+fov = 30.9
+size = 33.484
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=854235278]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 174.04794, -485.32928)
 light_specular = 0.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=123632218]
