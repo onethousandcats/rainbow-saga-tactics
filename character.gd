@@ -21,6 +21,8 @@ var has_moved: bool = false
 var is_alive: bool = true
 var is_animating: bool = false
 var is_player_controlled: bool = true
+var facing: Vector2i = Vector2i(0, 1) # Default facing direction (down)
+var facing_marker: MeshInstance3D
 
 func _ready() -> void:
 	print("Character ", character_name, " has entered the battlefield with ", current_health, " health")
@@ -47,8 +49,14 @@ func setup(start_pos: Vector2i, size: float) -> void:
 
 	var mesh_instance = MeshInstance3D.new()
 	mesh_instance.mesh = CapsuleMesh.new()
-
 	add_child(mesh_instance)
+
+	facing_marker = MeshInstance3D.new()
+	var marker_mesh = BoxMesh.new()
+	marker_mesh.size = Vector3(0.3, 0.3, 0.3)
+	facing_marker.mesh = marker_mesh
+	add_child(facing_marker)
+	update_facing_marker()
 
 	position = Vector3(grid_pos.x * tile_size, 1.0, grid_pos.y * tile_size)
 
@@ -57,6 +65,12 @@ func move_along_path(path: Array) -> void:
 		return
 
 	is_animating = true
+
+	var last_step = path[path.size() - 1]
+	var second_to_last = path[path.size() - 2] if path.size() > 1 else grid_pos
+	facing = last_step - second_to_last
+	update_facing_marker()
+
 	var tween = create_tween()
 	for step in path:
 		var target = Vector3(step.x * tile_size, position.y, step.y * tile_size)
@@ -73,3 +87,8 @@ func _on_move_finished() -> void:
 
 func end_turn() -> void:
 	has_moved = false
+
+func update_facing_marker() -> void:
+	var offset_distance = 0.6
+	var offset = Vector3(facing.x, 0, facing.y) * offset_distance
+	facing_marker.position = offset
