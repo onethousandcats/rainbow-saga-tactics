@@ -12,8 +12,8 @@ signal move_finished
 @export var max_health: int = 100
 @export var move_range: int = 3
 @export var attack_power: int = 10
-@export var max_climb: float = 1.0 # Maximum height difference the character can climb
-@export var max_drop: float = 3.0 # Maximum height difference the character can drop
+@export var max_climb: int = 1 # Maximum height difference the character can climb
+@export var max_drop: int = 3 # Maximum height difference the character can drop
 
 # Regular properties
 var current_health: int = max_health
