@@ -12,6 +12,8 @@ var camera_transitioning: bool = false
 var camera_rotation_index: int = 0 # 0-3, representing 0, 90, 180, 270 degrees
 var base_camera_offset = Vector3(14, 14, 14)
 
+var camera_tween: Tween = null
+
 var edit_mode: bool = false
 var selected_tile: Vector2i
 var has_selected_tile: bool = false
@@ -25,10 +27,12 @@ var tile_types = {
 }
 
 
+# --- Godot lifecycle ---
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	print("RAINBOW SAGA TACTICS")
-	
+
 	# spawn a grid of tiles
 	for x in range(16):
 		for z in range(16):
@@ -69,13 +73,6 @@ func _process(delta: float) -> void:
 		camera.position = unit.position + rotated_offset
 		camera.look_at(unit.position, Vector3.UP)
 
-func set_occupant(pos: Vector2i, unit: Character) -> void:
-	if grid.has(pos):
-		grid[pos]["occupant"] = unit
-
-func is_occupied(pos: Vector2i) -> bool:
-	return grid.has(pos) and grid[pos]["occupant"] != null
-
 func _unhandled_input(event: InputEvent) -> void:
 	var unit = turn_manager.current_unit()
 
@@ -112,7 +109,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					for step in path:
 						heights.append(grid[step]["height"])
 					unit.move_along_path(path, heights)
-					
+
 					# update the grid occupancy
 					set_occupant(old_pos, null)
 					set_occupant(grid_pos, unit)
@@ -152,140 +149,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		rotate_camera(1) # Rotate right
 
-func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
-	var neighbors = []
-	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	var current_height = grid[pos]["height"]
 
-	for dir in directions:
-		var neighbor = pos + dir
-		if grid.has(neighbor) and tile_types[grid[neighbor]["type"]]["walkable"] and not is_occupied(neighbor):
-			var height_diff = abs(grid[neighbor]["height"] - current_height)
-			if grid[neighbor]["height"] > current_height:
-				if height_diff <= max_climb:
-					neighbors.append(neighbor)
-			else:
-				if height_diff <= max_drop:
-					neighbors.append(neighbor)
+# --- Grid / occupancy ---
 
-	return neighbors
+func set_occupant(pos: Vector2i, unit: Character) -> void:
+	if grid.has(pos):
+		grid[pos]["occupant"] = unit
 
-func get_reachable_tiles(start: Vector2i, move_range: int) -> Array:
-	var distances = {start: 0}
-	var queue = [start]
-	
-	while queue.size() > 0:
-		var current = queue.pop_front()
-		var current_distance = distances[current]
+func is_occupied(pos: Vector2i) -> bool:
+	return grid.has(pos) and grid[pos]["occupant"] != null
 
-		if current_distance >= move_range:
-			continue # don't expand further from here, out of range
 
-		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
-			if not distances.has(neighbor):
-				distances[neighbor] = current_distance + 1
-				queue.append(neighbor)
-
-	return distances.keys()
-
-func find_path(start: Vector2i, target: Vector2i) -> Array:
-	var queue = [start]
-	var came_from = {start: start}
-
-	while queue.size() > 0:
-		var current = queue.pop_front()
-
-		if current == target:
-			break
-
-		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
-			if not came_from.has(neighbor):
-				came_from[neighbor] = current
-				queue.append(neighbor)
-			
-	if not came_from.has(target):
-		return [] # No path found
-	
-	var path = []
-	var step = target
-	while step != start:
-		path.append(step)
-		step = came_from[step]
-	path.reverse()
-
-	return path
-
-func highlight_tiles(tiles: Array) -> void:
-	for pos in grid.keys():
-		var tile_node = grid[pos]["node"]
-		var mat = StandardMaterial3D.new()
-		if pos in tiles:
-			mat.albedo_color = Color.YELLOW
-		else:
-			mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
-		tile_node.material_override = mat
-
-func clear_highlights() -> void:
-	for pos in grid.keys():
-		var tile_node = grid[pos]["node"]
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
-		tile_node.material_override = mat
-
-func take_npc_turn(unit: Character) -> void:
-	var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
-	reachable.erase(unit.grid_pos)
-
-	if reachable.size() == 0:
-		turn_manager.advance_turn()
-		return
-
-	var target = reachable.pick_random()
-	var old_pos = unit.grid_pos
-	var path = find_path(old_pos, target)
-
-	var heights = []
-	for step in path:
-		heights.append(grid[step]["height"])
-	unit.move_along_path(path, heights)
-	set_occupant(old_pos, null)
-	set_occupant(target, unit)
-
-	unit.move_finished.connect(turn_manager.advance_turn, CONNECT_ONE_SHOT)
-
-func transition_camera_to(unit: Character) -> void:
-	camera_transitioning = true
-	var start_pos = camera.position
-	var angle = deg_to_rad(camera_rotation_index * 90)
-	var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
-	var target_pos = unit.position + rotated_offset
-
-	var tween = create_tween()
-	tween.tween_method(_update_camera_transition.bind(unit, start_pos, target_pos), 0.0, 1.0, 0.3)
-	tween.finished.connect(func():
-		camera_transitioning = false
-	)
-
-func save_level(path: String) -> void:
-	var tiles = []
-	for pos in grid.keys():
-		tiles.append({
-			"x": pos.x,
-			"y": pos.y,
-			"type": grid[pos]["type"],
-			"height": grid[pos]["height"],
-		})
-
-	var data = {"tiles": tiles}
-	var json_string = JSON.stringify(data)
-
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(json_string)
-		file.close()
-		print("Level saved to ", path)
-	else:
-		print("Failed to save level to ", path)
+# --- Tile management ---
 
 func spawn_tile(x: int, z: int, type_name: String, height: int) -> void:
 	var type_data = tile_types[type_name]
@@ -318,27 +193,6 @@ func spawn_tile(x: int, z: int, type_name: String, height: int) -> void:
 
 	add_child(tile)
 
-
-func load_level(path: String) -> void:
-	if not FileAccess.file_exists(path):
-		print("Level file does not exist: ", path)
-		return
-
-	var file = FileAccess.open(path, FileAccess.READ)
-	var json_string = file.get_as_text()
-	file.close()
-
-	var json = JSON.new()
-	var parse_result = json.parse(json_string)
-	if parse_result != OK:
-		print("Failed to parse level JSON: ", json.get_error_message())
-		return
-
-	var data = json.data
-
-	for tile_data in data["tiles"]:
-		spawn_tile(tile_data["x"], tile_data["y"], tile_data["type"], tile_data["height"])
-
 func edit_tile(pos: Vector2i) -> void:
 	if grid[pos]["occupant"] != null:
 		print("Cannot edit tile at ", pos, " because it is occupied by a character.")
@@ -361,10 +215,187 @@ func adjust_height(pos: Vector2i, delta: int) -> void:
 	grid[pos]["node"].queue_free()
 	spawn_tile(pos.x, pos.y, type_name, new_height)
 
+
+# --- Level persistence ---
+
+func save_level(path: String) -> void:
+	var tiles = []
+	for pos in grid.keys():
+		tiles.append({
+			"x": pos.x,
+			"y": pos.y,
+			"type": grid[pos]["type"],
+			"height": grid[pos]["height"],
+		})
+
+	var data = {"tiles": tiles}
+	var json_string = JSON.stringify(data)
+
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		print("Level saved to ", path)
+	else:
+		print("Failed to save level to ", path)
+
+func load_level(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		print("Level file does not exist: ", path)
+		return
+
+	var file = FileAccess.open(path, FileAccess.READ)
+	var json_string = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var parse_result = json.parse(json_string)
+	if parse_result != OK:
+		print("Failed to parse level JSON: ", json.get_error_message())
+		return
+
+	var data = json.data
+
+	for tile_data in data["tiles"]:
+		spawn_tile(tile_data["x"], tile_data["y"], tile_data["type"], tile_data["height"])
+
+
+# --- Pathfinding / movement ---
+
+func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
+	var neighbors = []
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var current_height = grid[pos]["height"]
+
+	for dir in directions:
+		var neighbor = pos + dir
+		if grid.has(neighbor) and tile_types[grid[neighbor]["type"]]["walkable"] and not is_occupied(neighbor):
+			var height_diff = abs(grid[neighbor]["height"] - current_height)
+			if grid[neighbor]["height"] > current_height:
+				if height_diff <= max_climb:
+					neighbors.append(neighbor)
+			else:
+				if height_diff <= max_drop:
+					neighbors.append(neighbor)
+
+	return neighbors
+
+func get_reachable_tiles(start: Vector2i, move_range: int) -> Array:
+	var distances = {start: 0}
+	var queue = [start]
+
+	while queue.size() > 0:
+		var current = queue.pop_front()
+		var current_distance = distances[current]
+
+		if current_distance >= move_range:
+			continue # don't expand further from here, out of range
+
+		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
+			if not distances.has(neighbor):
+				distances[neighbor] = current_distance + 1
+				queue.append(neighbor)
+
+	return distances.keys()
+
+func find_path(start: Vector2i, target: Vector2i) -> Array:
+	var queue = [start]
+	var came_from = {start: start}
+
+	while queue.size() > 0:
+		var current = queue.pop_front()
+
+		if current == target:
+			break
+
+		for neighbor in get_neighbors(current, turn_manager.current_unit().max_climb, turn_manager.current_unit().max_drop):
+			if not came_from.has(neighbor):
+				came_from[neighbor] = current
+				queue.append(neighbor)
+
+	if not came_from.has(target):
+		return [] # No path found
+
+	var path = []
+	var step = target
+	while step != start:
+		path.append(step)
+		step = came_from[step]
+	path.reverse()
+
+	return path
+
+
+# --- Tile highlighting ---
+
+func highlight_tiles(tiles: Array) -> void:
+	for pos in grid.keys():
+		var tile_node = grid[pos]["node"]
+		var mat = StandardMaterial3D.new()
+		if pos in tiles:
+			mat.albedo_color = Color.YELLOW
+		else:
+			mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
+		tile_node.material_override = mat
+
+func clear_highlights() -> void:
+	for pos in grid.keys():
+		var tile_node = grid[pos]["node"]
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = tile_types[grid[pos]["type"]]["color"]
+		tile_node.material_override = mat
+
+
+# --- Turn logic ---
+
+func take_npc_turn(unit: Character) -> void:
+	var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
+	reachable.erase(unit.grid_pos)
+
+	if reachable.size() == 0:
+		call_deferred("advance_turn") # No reachable tiles, end turn
+		return
+
+	var target = reachable.pick_random()
+	var old_pos = unit.grid_pos
+	var path = find_path(old_pos, target)
+
+	var heights = []
+	for step in path:
+		heights.append(grid[step]["height"])
+	unit.move_along_path(path, heights)
+	set_occupant(old_pos, null)
+	set_occupant(target, unit)
+
+	unit.move_finished.connect(turn_manager.advance_turn, CONNECT_ONE_SHOT)
+
+
+# --- Camera ---
+
 func rotate_camera(direction: int) -> void:
 	camera_rotation_index = (camera_rotation_index + direction) % 4
+	if camera_rotation_index < 0:
+		camera_rotation_index += 4
 	transition_camera_to(turn_manager.current_unit())
 
-func _update_camera_transition(t: float, unit: Character, start_pos: Vector3, target_pos: Vector3) -> void:
-	camera.position = start_pos.lerp(target_pos, t)
-	camera.look_at(unit.position, Vector3.UP)
+func transition_camera_to(unit: Character, on_finished: Callable = Callable()) -> void:
+	if camera_tween and camera_tween.is_valid():
+		camera_tween.kill()
+
+	camera_transitioning = true
+	var start_pos = camera.position
+	var angle = deg_to_rad(camera_rotation_index * 90)
+	var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
+
+	camera_tween = create_tween()
+	camera_tween.tween_method(_update_camera_transition.bind(unit, start_pos, rotated_offset), 0.0, 1.0, 0.5)
+	camera_tween.finished.connect(func():
+		camera_transitioning = false
+		if on_finished.is_valid():
+			on_finished.call()
+	)
+
+func _update_camera_transition(t: float, unit: Character, start_pos: Vector3, offset: Vector3) -> void:
+	var current_target = unit.position + offset
+	camera.position = start_pos.lerp(current_target, t)
+	camera.look_at(camera.position - offset, Vector3.UP)
