@@ -35,15 +35,6 @@ func _ready() -> void:
 			tile.mesh = mesh
 			tile.position = Vector3(x * tile_size, 0.1 + height / 2.0, z * tile_size)
 
-			var material = StandardMaterial3D.new()
-
-			if (x + z) % 2 == 0:
-				material.albedo_color = Color(0.8, 0.8, 0.8)
-			else:
-				material.albedo_color = Color(0.6, 0.6, 0.6)
-
-			tile.material_override = material
-
 			var static_body = StaticBody3D.new()
 			var collision_shape = CollisionShape3D.new()
 			var shape = BoxShape3D.new()
@@ -52,6 +43,10 @@ func _ready() -> void:
 
 			var type_name = tile_types.keys().pick_random()
 			var type_data = tile_types[type_name]
+
+			var material = StandardMaterial3D.new()
+			material.albedo_color = type_data["color"]
+			tile.material_override = material
 
 			static_body.set_meta("grid_pos", Vector2i(x, z))
 			static_body.add_child(collision_shape)
