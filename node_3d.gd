@@ -9,6 +9,8 @@ var tile_size = 2.0
 @onready var camera: Camera3D = $Camera3D
 var camera_offset = Vector3(14, 14, 14)
 var camera_transitioning: bool = false
+var camera_rotation_index: int = 0 # 0-3, representing 0, 90, 180, 270 degrees
+var base_camera_offset = Vector3(14, 14, 14)
 
 var edit_mode: bool = false
 var selected_tile: Vector2i
@@ -62,7 +64,10 @@ func _process(delta: float) -> void:
 		return # Skip camera updates while transitioning
 	if turn_manager and turn_manager.units.size() > 0:
 		var unit = turn_manager.current_unit()
-		camera.position = unit.position + camera_offset
+		var angle = deg_to_rad(camera_rotation_index * 90)
+		var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
+		camera.position = unit.position + rotated_offset
+		camera.look_at(unit.position, Vector3.UP)
 
 func set_occupant(pos: Vector2i, unit: Character) -> void:
 	if grid.has(pos):
@@ -141,6 +146,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_L:
 		load_level("res://saved_level.json")
 		print("Level loaded")
+
+	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
+		rotate_camera(-1) # Rotate left
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
+		rotate_camera(1) # Rotate right
 
 func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
 	var neighbors = []
@@ -344,3 +354,24 @@ func adjust_height(pos: Vector2i, delta: int) -> void:
 
 	grid[pos]["node"].queue_free()
 	spawn_tile(pos.x, pos.y, type_name, new_height)
+
+func rotate_camera(direction: int) -> void:
+	camera_rotation_index = (camera_rotation_index + direction) % 4
+	if camera_rotation_index < 0:
+		camera_rotation_index += 4
+
+	camera_transitioning = true
+
+	var unit = turn_manager.current_unit()
+	var start_pos = camera.position
+	var angle = deg_to_rad(camera_rotation_index * 90)
+	var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
+	var target = unit.position + rotated_offset
+
+	var tween = create_tween()
+	tween.tween_method(_update_camera_transition.bind(unit, start_pos, target), 0.0, 1.0, 0.3)
+	tween.finished.connect(func(): camera_transitioning = false)
+
+func _update_camera_transition(t: float, unit: Character, start_pos: Vector3, target_pos: Vector3) -> void:
+	camera.position = start_pos.lerp(target_pos, t)
+	camera.look_at(unit.position, Vector3.UP)
