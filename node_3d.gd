@@ -255,10 +255,16 @@ func take_npc_turn(unit: Character) -> void:
 
 func transition_camera_to(unit: Character) -> void:
 	camera_transitioning = true
-	var target = unit.position + camera_offset
+	var start_pos = camera.position
+	var angle = deg_to_rad(camera_rotation_index * 90)
+	var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
+	var target_pos = unit.position + rotated_offset
+
 	var tween = create_tween()
-	tween.tween_property(camera, "position", target, 1.0)
-	tween.finished.connect(func(): camera_transitioning = false)
+	tween.tween_method(_update_camera_transition.bind(unit, start_pos, target_pos), 0.0, 1.0, 0.3)
+	tween.finished.connect(func():
+		camera_transitioning = false
+	)
 
 func save_level(path: String) -> void:
 	var tiles = []
@@ -357,20 +363,7 @@ func adjust_height(pos: Vector2i, delta: int) -> void:
 
 func rotate_camera(direction: int) -> void:
 	camera_rotation_index = (camera_rotation_index + direction) % 4
-	if camera_rotation_index < 0:
-		camera_rotation_index += 4
-
-	camera_transitioning = true
-
-	var unit = turn_manager.current_unit()
-	var start_pos = camera.position
-	var angle = deg_to_rad(camera_rotation_index * 90)
-	var rotated_offset = base_camera_offset.rotated(Vector3.UP, angle)
-	var target = unit.position + rotated_offset
-
-	var tween = create_tween()
-	tween.tween_method(_update_camera_transition.bind(unit, start_pos, target), 0.0, 1.0, 0.3)
-	tween.finished.connect(func(): camera_transitioning = false)
+	transition_camera_to(turn_manager.current_unit())
 
 func _update_camera_transition(t: float, unit: Character, start_pos: Vector3, target_pos: Vector3) -> void:
 	camera.position = start_pos.lerp(target_pos, t)
