@@ -10,6 +10,10 @@ var tile_size = 2.0
 var camera_offset = Vector3(14, 14, 14)
 var camera_transitioning: bool = false
 
+var edit_mode: bool = false
+var selected_tile: Vector2i
+var has_selected_tile: bool = false
+
 var tile_types = {
 	"plains": {"walkable": true, "color": Color(0.6, 0.8, 0.4)},
 	"grassland": {"walkable": true, "color": Color(0.4, 0.7, 0.3)},
@@ -26,40 +30,11 @@ func _ready() -> void:
 	# spawn a grid of tiles
 	for x in range(16):
 		for z in range(16):
-			var height = randf_range(0.0, 2.0) # Random height for visual variety
-
-			var tile = MeshInstance3D.new()
-			var mesh = BoxMesh.new()
-			mesh.size = Vector3(tile_size, 0.2 + height, tile_size)
-			
-			tile.mesh = mesh
-			tile.position = Vector3(x * tile_size, 0.1 + height / 2.0, z * tile_size)
-
-			var static_body = StaticBody3D.new()
-			var collision_shape = CollisionShape3D.new()
-			var shape = BoxShape3D.new()
-			shape.size = mesh.size
-			collision_shape.shape = shape
-
+			var height = randi_range(0, 2) # Random height for visual variety
 			var type_name = tile_types.keys().pick_random()
-			var type_data = tile_types[type_name]
+			spawn_tile(x, z, type_name, height)
 
-			var material = StandardMaterial3D.new()
-			material.albedo_color = type_data["color"]
-			tile.material_override = material
-
-			static_body.set_meta("grid_pos", Vector2i(x, z))
-			static_body.add_child(collision_shape)
-			tile.add_child(static_body)
-
-			grid[Vector2i(x, z)] = {
-				"type": type_name,
-				"node": tile,
-				"occupant": null,
-				"height": height
-			} # Random height for visual variety
-
-			add_child(tile)
+	# load_level("res://saved_level.json") # Load the level from a JSON file
 
 	# spawn a player character
 	var player_unit = Character.new()
@@ -116,6 +91,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		if result:
 			var grid_pos = result.collider.get_meta("grid_pos")
+
+			if edit_mode:
+				selected_tile = grid_pos
+				has_selected_tile = true
+				edit_tile(grid_pos)
+				return
+
 			if not unit.has_moved:
 				var reachable = get_reachable_tiles(unit.grid_pos, unit.move_range)
 				if grid_pos in reachable:
@@ -143,6 +125,22 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
 		save_level("res://saved_level.json")
 		print("Level saved")
+
+	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
+		edit_mode = not edit_mode
+		if not edit_mode:
+			has_selected_tile = false
+		print("Edit mode toggled: ", edit_mode)
+
+	if event is InputEventKey and event.pressed and edit_mode and has_selected_tile:
+		if event.keycode == KEY_UP:
+			adjust_height(selected_tile, 1)
+		elif event.keycode == KEY_DOWN:
+			adjust_height(selected_tile, -1)
+
+	if event is InputEventKey and event.pressed and event.keycode == KEY_L:
+		load_level("res://saved_level.json")
+		print("Level loaded")
 
 func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
 	var neighbors = []
@@ -272,3 +270,77 @@ func save_level(path: String) -> void:
 		print("Level saved to ", path)
 	else:
 		print("Failed to save level to ", path)
+
+func spawn_tile(x: int, z: int, type_name: String, height: int) -> void:
+	var type_data = tile_types[type_name]
+
+	var tile = MeshInstance3D.new()
+	var mesh = BoxMesh.new()
+	mesh.size = Vector3(tile_size, 0.2 + height, tile_size)
+	tile.mesh = mesh
+	tile.position = Vector3(x * tile_size, 0.1 + height / 2.0, z * tile_size)
+
+	var material = StandardMaterial3D.new()
+	material.albedo_color = type_data["color"]
+	tile.material_override = material
+
+	var static_body = StaticBody3D.new()
+	var collision_shape = CollisionShape3D.new()
+	var shape = BoxShape3D.new()
+	shape.size = mesh.size
+	collision_shape.shape = shape
+	static_body.set_meta("grid_pos", Vector2i(x, z))
+	static_body.add_child(collision_shape)
+	tile.add_child(static_body)
+
+	grid[Vector2i(x, z)] = {
+		"type": type_name,
+		"node": tile,
+		"occupant": null,
+		"height": height
+	}
+
+	add_child(tile)
+
+
+func load_level(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		print("Level file does not exist: ", path)
+		return
+
+	var file = FileAccess.open(path, FileAccess.READ)
+	var json_string = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var parse_result = json.parse(json_string)
+	if parse_result != OK:
+		print("Failed to parse level JSON: ", json.get_error_message())
+		return
+
+	var data = json.data
+
+	for tile_data in data["tiles"]:
+		spawn_tile(tile_data["x"], tile_data["y"], tile_data["type"], tile_data["height"])
+
+func edit_tile(pos: Vector2i) -> void:
+	if grid[pos]["occupant"] != null:
+		print("Cannot edit tile at ", pos, " because it is occupied by a character.")
+		return
+
+	var current_type = grid[pos]["type"]
+	var type_names = tile_types.keys()
+	var current_index = type_names.find(current_type)
+	var next_type = type_names[(current_index + 1) % type_names.size()]
+	var height = grid[pos]["height"]
+
+	grid[pos]["node"].queue_free()
+	spawn_tile(pos.x, pos.y, next_type, height)
+
+func adjust_height(pos: Vector2i, delta: int) -> void:
+	var type_name = grid[pos]["type"]
+	var new_height = grid[pos]["height"] + delta
+	new_height = max(0, new_height)
+
+	grid[pos]["node"].queue_free()
+	spawn_tile(pos.x, pos.y, type_name, new_height)
