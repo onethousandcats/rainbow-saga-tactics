@@ -145,6 +145,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		turn_manager.advance_turn()
 		print("Turn ended")
 
+	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
+		save_level("res://saved_level.json")
+		print("Level saved")
+
 func get_neighbors(pos: Vector2i, max_climb: float, max_drop: float) -> Array:
 	var neighbors = []
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
@@ -252,3 +256,24 @@ func transition_camera_to(unit: Character) -> void:
 	var tween = create_tween()
 	tween.tween_property(camera, "position", target, 1.0)
 	tween.finished.connect(func(): camera_transitioning = false)
+
+func save_level(path: String) -> void:
+	var tiles = []
+	for pos in grid.keys():
+		tiles.append({
+			"x": pos.x,
+			"y": pos.y,
+			"type": grid[pos]["type"],
+			"height": grid[pos]["height"],
+		})
+
+	var data = {"tiles": tiles}
+	var json_string = JSON.stringify(data)
+
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		print("Level saved to ", path)
+	else:
+		print("Failed to save level to ", path)
